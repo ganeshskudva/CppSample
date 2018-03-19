@@ -1,5 +1,5 @@
 CXX=g++
-CPPFLAGS=-c -Wall -IAffirm.hpp -g
+CPPFLAGS=-Wall -IAffirm.hpp -g
 all:
 	$(CXX) $(CPPFLAGS) -o sample Affirm.cpp --std=c++11
 
