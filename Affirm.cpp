@@ -280,7 +280,7 @@ main(int argc, char* argv[])
 
 	if (RC_SUCCESS != rc)
 	{
-		cout << endl << "Usage: " << argv[0] << "<path to csv files of> facilities banks covenants loans" << endl;
+		cout << endl << "Usage: " << argv[0] << " <path to csv files of> facilities banks covenants loans" << endl;
 		return rc;
 	}
 	else
