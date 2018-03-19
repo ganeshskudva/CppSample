@@ -1,226 +1,188 @@
-//#include <bits/stdc++.h>
-#include "bits/stdc++.h"
+#include "Affirm.hpp"
 
 using namespace std;
-
-/* Sample app function return codes */
-#define RC_SUCCESS				0	// No error
-#define RC_ERROR				-1	// An unexpected error has occured
-#define INT_RATE_MAX 			9999.0
-
-#define ASSIGNMENTS_RESULTS_FILENAME 	"assignments.csv"
-#define YIELDS_RESULTS_FILENAME			"yields.csv"
-
-#define INPUT_TYPE_FACILITIES	 		"Facilities"
-#define INPUT_TYPE_COVENANTS	 		"Covenants"
-#define INPUT_TYPE_LOANS	 			"Loans"
-
-class Results
-{
-public:
-	Results();
-
-	static void addToResLocanFacIDMap(int loanId, float facId)
-	{
-		resLoanFacIDMap[loanId] = facId;
-	}
-
-	static void addToResFacYieldMap(int facId, float facIntRate, int loanAmt, float defLikely, float loanIntRate)
-	{
-		float expectedYield = 0;
-		float currYield = 0;
-
-		currYield = ((1 - defLikely) * loanIntRate * loanAmt) - (defLikely * loanAmt) - (facIntRate * loanAmt);
-
-		if (resFacYieldMap.find(facId) != resFacYieldMap.end())
-		{
-			expectedYield = resFacYieldMap[facId];
-		}
-		resFacYieldMap[facId] = expectedYield + currYield;
-	}
-
-	static void generateAssignments()
-	{
-		ofstream resFile;
-		resFile.open(ASSIGNMENTS_RESULTS_FILENAME);
-		resFile << "loan_id,facility_id,\n";
-
-		for (auto it = resLoanFacIDMap.begin(); it != resLoanFacIDMap.end(); it++)
-		{
-			resFile << it->first <<","<<it->second<<"\n";
-		}
-
-		resFile.close();
-	}
-
-	static void generateYields()
-	{
-		double param, fractPart, intPart;
-		int res;
-		ofstream resFile;
-		resFile.open(YIELDS_RESULTS_FILENAME);
-		resFile << "facility_id,expected_yield,\n";
-
-
-		for (auto it = resFacYieldMap.begin(); it != resFacYieldMap.end(); it++)
-		{
-			fractPart = modf(it->second, &intPart);
-
-			if (fractPart >= 0.5)
-			{
-				res = intPart + 1;
-			}
-			else
-			{
-				res = intPart;
-			}
-			resFile << it->first<<","<<res<<"\n";
-		}
-
-		resFile.close();
-	}
-private:
-	static map<int, int> resLoanFacIDMap;
-	static map<int, float> resFacYieldMap;
-};
-
-
-class Covenants
-{
-public:
-	Covenants();
-	Covenants(string bankId)
-	{
-		this->bankId = stoi(bankId);
-	}
-
-	static void addToCovenantsMaxDefaultMap(int key, float maxDeafult)
-	{
-		float currMax;
-
-		if (covenantsMaxDefaultMap.find(key) != covenantsMaxDefaultMap.end())
-		{
-			currMax = covenantsMaxDefaultMap[key];
-			if (maxDeafult > currMax)
-				currMax = maxDeafult;
-			covenantsMaxDefaultMap[key] = currMax;
-		}
-		else
-		{
-			covenantsMaxDefaultMap[key] = maxDeafult;
-		}
-	}
-
-	static float getFromCovenantsMaxDefaultMap(int key)
-	{
-		float max = 0.0;
-
-		if (covenantsMaxDefaultMap.find(key) != covenantsMaxDefaultMap.end())
-			max = covenantsMaxDefaultMap[key];
-
-		return max;
-	}
-
-	static void addToCovenantsBanStateMap(string key, int facilityId)
-	{
-		unordered_set<int> bannedFacilitySet;
-		bannedFacilitySet.clear();
-
-		if (key != "ZZ")
-		{
-			if (covenantsBanStateMap.find(key) != covenantsBanStateMap.end())
-			{
-				bannedFacilitySet = covenantsBanStateMap[key];
-			}
-
-			bannedFacilitySet.insert(facilityId);
-			covenantsBanStateMap[key] = bannedFacilitySet;
-		}
-
-	}
-
-	static unordered_set<int> getFromCovenantsBanStateMap(string key)
-	{
-		unordered_set<int> bannedFacilitySet;
-		bannedFacilitySet.clear();
-
-		if (covenantsBanStateMap.find(key) != covenantsBanStateMap.end())
-			bannedFacilitySet = covenantsBanStateMap[key];
-
-		return bannedFacilitySet;
-	}
-
-
-private:
-	int bankId;
-	static unordered_map<int, float> covenantsMaxDefaultMap;
-	static unordered_map<string, unordered_set<int> > covenantsBanStateMap;
-
-};
-
-
-class Facilities
-{
-public:
-	Facilities(){};
-	Facilities(string amt, string intRate, string bankId)
-	{
-		this->amount = stoi(amt);
-		this->interestRate = stof(intRate);
-		this->bankId = stoi(bankId);
-	}
-
-	static void addToFacilitiesMap(int key, Facilities &facilities)
-	{
-		facilitiesMap[key] = facilities;
-	}
-
-	static void processLoan(unordered_set<int> &bannedFacilitySet, int loanId, int loanAmt, float defLikely, float intRate)
-	{
-		Facilities facility, facilitySelected;
-		float currMin = INT_RATE_MAX;
-		int facId = 0;
-		float maxDeafult = 0.0;
-
-		for (auto it = facilitiesMap.begin(); it != facilitiesMap.end(); it++)
-		{
-			if (bannedFacilitySet.find(it->first) == bannedFacilitySet.end())
-			{
-				facility = it->second;
-				maxDeafult = Covenants::getFromCovenantsMaxDefaultMap(it->first);
-
-				if ((facility.amount > loanAmt) && 
-					(facility.interestRate < currMin) &&
-					(defLikely <= maxDeafult))
-				{
-					currMin = facility.interestRate;
-					facId = it->first;
-					facilitySelected = facility;
-				}
-			}
-		}
-
-		facilitySelected.amount = facilitySelected.amount -  loanAmt;
-//		cout << "Selected id:"<<facId << " Remaining Amt:" <<  facilitySelected.amount<<" Loan: "<<loanAmt<< endl;
-		Results::addToResLocanFacIDMap(loanId, facId);
-		Results::addToResFacYieldMap(facId, currMin, loanAmt, defLikely, intRate);
-
-	}
-
-private:
-	int amount;
-	float interestRate;
-	int bankId; 
-	static unordered_map<int, Facilities> facilitiesMap;
-};
-
-
 
 map<int, int> Results::resLoanFacIDMap;
 map<int, float> Results::resFacYieldMap;
 unordered_map<int, float> Covenants::covenantsMaxDefaultMap;
 unordered_map<string, unordered_set<int> > Covenants::covenantsBanStateMap;
 unordered_map<int, Facilities> Facilities::facilitiesMap;
+
+Results::Results(){};
+Results::~Results(){};
+
+void Results::addToResLocanFacIDMap(int loanId, float facId)
+{
+	resLoanFacIDMap[loanId] = facId;
+}
+
+void Results::addToResFacYieldMap(int facId, float facIntRate, int loanAmt, float defLikely, float loanIntRate)
+{
+	float expectedYield = 0;
+	float currYield = 0;
+
+	currYield = ((1 - defLikely) * loanIntRate * loanAmt) - (defLikely * loanAmt) - (facIntRate * loanAmt);
+
+	if (resFacYieldMap.find(facId) != resFacYieldMap.end())
+	{
+		expectedYield = resFacYieldMap[facId];
+	}
+	resFacYieldMap[facId] = expectedYield + currYield;
+}
+
+void Results::generateAssignments()
+{
+	ofstream resFile;
+	resFile.open(ASSIGNMENTS_RESULTS_FILENAME);
+	resFile << "loan_id,facility_id,\n";
+
+	for (auto it = resLoanFacIDMap.begin(); it != resLoanFacIDMap.end(); it++)
+	{
+		resFile << it->first <<","<<it->second<<"\n";
+	}
+
+	resFile.close();
+}
+
+void Results::generateYields()
+{
+	double fractPart, intPart;
+	int res;
+	ofstream resFile;
+	resFile.open(YIELDS_RESULTS_FILENAME);
+	resFile << "facility_id,expected_yield,\n";
+
+
+	for (auto it = resFacYieldMap.begin(); it != resFacYieldMap.end(); it++)
+	{
+		fractPart = modf(it->second, &intPart);
+
+		if (fractPart >= 0.5)
+		{
+			res = intPart + 1;
+		}
+		else
+		{
+			res = intPart;
+		}
+		resFile << it->first<<","<<res<<"\n";
+	}
+
+	resFile.close();
+}
+
+
+Covenants::Covenants(){};
+	
+Covenants::Covenants(string bankId)
+{
+	this->bankId = stoi(bankId);
+}
+
+Covenants::~Covenants(){};
+
+void Covenants::addToCovenantsMaxDefaultMap(int key, float maxDeafult)
+{
+	float currMax;
+
+	if (covenantsMaxDefaultMap.find(key) != covenantsMaxDefaultMap.end())
+	{
+		currMax = covenantsMaxDefaultMap[key];
+		if (maxDeafult > currMax)
+			currMax = maxDeafult;
+		covenantsMaxDefaultMap[key] = currMax;
+	}
+	else
+	{
+		covenantsMaxDefaultMap[key] = maxDeafult;
+	}
+}
+
+float Covenants::getFromCovenantsMaxDefaultMap(int key)
+{
+	float max = 0.0;
+
+	if (covenantsMaxDefaultMap.find(key) != covenantsMaxDefaultMap.end())
+		max = covenantsMaxDefaultMap[key];
+
+	return max;
+}
+
+void Covenants::addToCovenantsBanStateMap(string key, int facilityId)
+{
+	unordered_set<int> bannedFacilitySet;
+	bannedFacilitySet.clear();
+
+	if (key != "ZZ")
+	{
+		if (covenantsBanStateMap.find(key) != covenantsBanStateMap.end())
+		{
+			bannedFacilitySet = covenantsBanStateMap[key];
+		}
+
+		bannedFacilitySet.insert(facilityId);
+		covenantsBanStateMap[key] = bannedFacilitySet;
+	}
+
+}
+
+unordered_set<int> Covenants::getFromCovenantsBanStateMap(string key)
+{
+	unordered_set<int> bannedFacilitySet;
+	bannedFacilitySet.clear();
+
+	if (covenantsBanStateMap.find(key) != covenantsBanStateMap.end())
+		bannedFacilitySet = covenantsBanStateMap[key];
+
+	return bannedFacilitySet;
+}
+
+Facilities::Facilities(){};
+
+Facilities::Facilities(string amt, string intRate, string bankId)
+{
+	this->amount = stoi(amt);
+	this->interestRate = stof(intRate);
+	this->bankId = stoi(bankId);
+}
+
+Facilities::~Facilities(){};
+
+void Facilities::addToFacilitiesMap(int key, Facilities &facilities)
+{
+	facilitiesMap[key] = facilities;
+}
+
+void Facilities::processLoan(unordered_set<int> &bannedFacilitySet, int loanId, int loanAmt, float defLikely, float intRate)
+{
+	Facilities facility, facilitySelected;
+	float currMin = INT_RATE_MAX;
+	int facId = 0;
+	float maxDeafult = 0.0;
+
+	for (auto it = facilitiesMap.begin(); it != facilitiesMap.end(); it++)
+	{
+		if (bannedFacilitySet.find(it->first) == bannedFacilitySet.end())
+		{
+			facility = it->second;
+			maxDeafult = Covenants::getFromCovenantsMaxDefaultMap(it->first);
+
+			if ((facility.amount > loanAmt) && 
+				(facility.interestRate < currMin) &&
+				(defLikely <= maxDeafult))
+			{
+				currMin = facility.interestRate;
+				facId = it->first;
+				facilitySelected = facility;
+			}
+		}
+	}
+
+	facilitySelected.amount = facilitySelected.amount -  loanAmt;
+	Results::addToResLocanFacIDMap(loanId, facId);
+	Results::addToResFacYieldMap(facId, currMin, loanAmt, defLikely, intRate);
+
+}
 
 void processLoans(vector<string> &vec)
 {
